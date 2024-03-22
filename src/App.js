@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 const tempMovieData = [
   {
@@ -50,20 +50,60 @@ const tempWatchedData = [
 const average = (arr) =>
   arr.reduce((acc, cur, i, arr) => acc + cur / arr.length, 0);
 
+const API_KEY = process.env.REACT_APP_OMDB_API_KEY;
+
 export default function App() {
-  const [movies, setMovies] = useState(tempMovieData);
-  const [watched, setWatched] = useState(tempWatchedData);
+  const [query, setQuery] = useState("");
+  const [movies, setMovies] = useState([]);
+  const [watched, setWatched] = useState([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(function () {
+    async function getMovies() {
+      try {
+        setError("");
+        setIsLoading(true);
+        const res = await fetch(
+          `http://www.omdbapi.com/?s=${query}&apikey=${API_KEY}`
+        );
+        if(!res.ok) {
+          throw new Error("Error occurred while fetching movies!");
+        }
+        const data = await res.json();
+        if (data.Response === 'False') {
+          throw new Error("Movie not found!");
+        }
+        setMovies(data.Search);
+      } catch (err) {
+        console.log(err);
+        setError(err.message)
+      } finally {
+        setIsLoading(false);
+      }
+    }
+
+    if(query.length < 3) {
+      setMovies([]);
+      setError("");
+      return;
+    }
+
+    getMovies();
+  }, [query]);
 
   return (
     <>
       <Navbar>
         <Logo />
-        <Searchbar />
+        <Searchbar query={query} setQuery={setQuery}/>
         <NumResults movies={movies} />
       </Navbar>
       <Main>
         <Box>
-          <MovieList movies={movies} />
+          {isLoading && <Loader />}
+          {!error && !isLoading && <MovieList movies={movies} />}
+          {!isLoading && error && <ErrorMessage error={error}/>}
         </Box>
         <Box>
           <WatchedSummary watched={watched} />
@@ -72,6 +112,14 @@ export default function App() {
       </Main>
     </>
   );
+}
+
+function Loader() {
+  return <p className="loader">Loading...</p>;
+}
+
+function ErrorMessage({ error }) {
+  return <p className="error">{error}</p>;
 }
 
 function Navbar({ children }) {
@@ -87,9 +135,7 @@ function Logo() {
   );
 }
 
-function Searchbar() {
-  const [query, setQuery] = useState("");
-
+function Searchbar({query, setQuery}) {
   return (
     <input
       className="search"
